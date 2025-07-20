@@ -4,7 +4,7 @@ defineProps({
   isLoading: Boolean
 })
 
-defineEmits(['update:inputMessage', 'send-message', 'clear-chat'])
+const emit = defineEmits(['update:inputMessage', 'send-message', 'clear-chat'])
 
 const handleEnterKey = (event) => {
   if (event.shiftKey) {
@@ -16,8 +16,6 @@ const handleEnterKey = (event) => {
     emit('send-message')
   }
 }
-
-const emit = defineEmits(['update:inputMessage', 'send-message', 'clear-chat'])
 </script>
 
 <template>
