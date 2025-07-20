@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bedrock Chat</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aws-sdk/2.1691.0/aws-sdk.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-header {
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .chat-header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .connection-status {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+
+        .status-indicator.disconnected {
+            background: #ef4444;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            max-width: 80%;
+            opacity: 0;
+            animation: fadeInUp 0.3s ease forwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        }
+
+        .message-content {
+            background: white;
+            padding: 0.875rem 1.25rem;
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .message.user .message-content::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -8px;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid #667eea;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+        }
+
+        .message.assistant .message-content::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -8px;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-right: 8px solid white;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
+
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: #f3f4f6;
+            border-radius: 1rem;
+            margin: 0.5rem 0;
+            align-self: flex-start;
+        }
+
+        .thinking-dots {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            background: #6b7280;
+            border-radius: 50%;
+            animation: bounce 1.4s ease-in-out infinite both;
+        }
+
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .chat-input-container {
+            padding: 1rem 2rem 2rem;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .chat-input {
+            width: 100%;
+            padding: 0.875rem 3rem 0.875rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 1.5rem;
+            font-size: 1rem;
+            resize: none;
+            max-height: 120px;
+            min-height: 48px;
+            font-family: inherit;
+            transition: border-color 0.2s ease;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+        .input-actions {
+            position: absolute;
+            right: 0.75rem;
+            bottom: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .clear-button {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .clear-button:hover {
+            background: #dc2626;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            border: 1px solid #fecaca;
+        }
+
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .model-select {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .model-select option {
+            background: #4f46e5;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .chat-header {
+                padding: 1rem;
+            }
+            
+            .chat-input-container {
+                padding: 1rem;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="chat-container">
+            <!-- Header -->
+            <header class="chat-header">
+                <h1>🤖 Bedrock Chat</h1>
+                <div class="model-selector">
+                    <label for="model-select" style="font-size: 0.75rem;">Model:</label>
+                    <select id="model-select" class="model-select" v-model="selectedModel">
+                        <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5 Sonnet</option>
+                        <option value="anthropic.claude-3-haiku-20240307-v1:0">Claude 3 Haiku</option>
+                        <option value="amazon.titan-text-premier-v1:0">Titan Text Premier</option>
+                    </select>
+                </div>
+                <div class="connection-status">
+                    <div :class="['status-indicator', { disconnected: !isConnected }]"></div>
+                    <span>{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
+                </div>
+            </header>
+
+            <!-- Messages -->
+            <main class="chat-messages" ref="messagesContainer">
+                <div v-if="messages.length === 0" class="message assistant">
+                    <div class="message-avatar">AI</div>
+                    <div class="message-content">
+                        <div>Hello! I'm ready to chat with you. This app is set up to connect to AWS Bedrock. How can I help you today?</div>
+                        <div class="message-time">{{ formatTime(new Date()) }}</div>
+                    </div>
+                </div>
+
+                <div 
+                    v-for="message in messages" 
+                    :key="message.id"
+                    :class="['message', message.role]"
+                >
+                    <div class="message-avatar">{{ message.role === 'user' ? 'You' : 'AI' }}</div>
+                    <div class="message-content">
+                        <div v-html="formatMessage(message.content)"></div>
+                        <div class="message-time">{{ formatTime(message.timestamp) }}</div>
+                    </div>
+                </div>
+
+                <div v-if="isLoading" class="thinking-indicator">
+                    <div class="thinking-dots">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <span>AI is thinking...</span>
+                </div>
+
+                <div v-if="errorMessage" class="error-message">
+                    {{ errorMessage }}
+                </div>
+            </main>
+
+            <!-- Input -->
+            <footer class="chat-input-container">
+                <div class="chat-input-form">
+                    <div class="input-wrapper">
+                        <textarea
+                            v-model="inputMessage"
+                            @keydown.enter.exact.prevent="sendMessage"
+                            @keydown.enter.shift.exact="inputMessage += '\n'"
+                            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                            class="chat-input"
+                            ref="messageInput"
+                            :disabled="isLoading"
+                        ></textarea>
+                        <div class="input-actions">
+                            <button 
+                                @click="sendMessage"
+                                :disabled="!inputMessage.trim() || isLoading"
+                                class="send-button"
+                                title="Send message"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button @click="clearChat" class="clear-button">Clear Chat</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, nextTick, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // State
+                const messages = ref([]);
+                const inputMessage = ref('');
+                const isLoading = ref(false);
+                const isConnected = ref(false);
+                const errorMessage = ref('');
+                const selectedModel = ref('anthropic.claude-3-5-sonnet-20241022-v2:0');
+                const messagesContainer = ref(null);
+                const messageInput = ref(null);
+
+                // AWS Configuration (stubbed for now)
+                const awsConfig = reactive({
+                    region: 'us-east-1', // Change to your preferred region
+                    accessKeyId: '', // Will be configured later
+                    secretAccessKey: '', // Will be configured later
+                    sessionToken: '' // For temporary credentials
+                });
+
+                let bedrockRuntime = null;
+
+                // Initialize AWS SDK (stubbed)
+                const initializeAWS = () => {
+                    try {
+                        // This will be uncommented when AWS credentials are available
+                        /*
+                        AWS.config.update({
+                            region: awsConfig.region,
+                            accessKeyId: awsConfig.accessKeyId,
+                            secretAccessKey: awsConfig.secretAccessKey,
+                            sessionToken: awsConfig.sessionToken
+                        });
+                        
+                        bedrockRuntime = new AWS.BedrockRuntime({
+                            region: awsConfig.region
+                        });
+                        */
+                        
+                        // Simulate connection for demo
+                        setTimeout(() => {
+                            isConnected.value = true;
+                        }, 1000);
+                        
+                        console.log('AWS Bedrock integration ready (stubbed)');
+                    } catch (error) {
+                        console.error('Failed to initialize AWS:', error);
+                        errorMessage.value = 'Failed to connect to AWS Bedrock';
+                    }
+                };
+
+                // Send message to Bedrock (stubbed)
+                const callBedrock = async (messages, modelId) => {
+                    // This is where the actual Bedrock API call will be made
+                    // For now, return a stubbed response
+                    
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            const responses = [
+                                "I'm a stubbed response from AWS Bedrock. When you integrate with the actual service, I'll provide real AI-generated responses!",
+                                "This is a simulated response. The actual Bedrock integration will use the model: " + modelId,
+                                "Hello! I'm ready to help once you connect to AWS Bedrock. This is just a placeholder response for now.",
+                                "Great question! Once connected to Bedrock, I'll be able to provide much more detailed and helpful responses.",
+                                "I'm running in demo mode. Connect to AWS Bedrock to unlock my full capabilities!"
+                            ];
+                            
+                            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+                            resolve(randomResponse);
+                        }, 1500 + Math.random() * 1000); // Random delay between 1.5-2.5s
+                    });
+
+                    /* 
+                    // Actual Bedrock implementation (commented out for stub)
+                    const body = {
+                        anthropic_version: "bedrock-2023-05-31",
+                        max_tokens: 2000,
+                        messages: messages.map(msg => ({
+                            role: msg.role,
+                            content: msg.content
+                        }))
+                    };
+
+                    const params = {
+                        body: JSON.stringify(body),
+                        contentType: 'application/json',
+                        accept: 'application/json',
+                        modelId: modelId
+                    };
+
+                    try {
+                        const response = await bedrockRuntime.invokeModel(params).promise();
+                        const responseBody = JSON.parse(response.body.toString());
+                        return responseBody.content[0].text;
+                    } catch (error) {
+                        console.error('Bedrock API error:', error);
+                        throw new Error('Failed to get response from Bedrock');
+                    }
+                    */
+                };
+
+                // Send message
+                const sendMessage = async () => {
+                    if (!inputMessage.value.trim() || isLoading.value) return;
+
+                    const userMessage = {
+                        id: Date.now(),
+                        role: 'user',
+                        content: inputMessage.value.trim(),
+                        timestamp: new Date()
+                    };
+
+                    messages.value.push(userMessage);
+                    const currentInput = inputMessage.value;
+                    inputMessage.value = '';
+                    isLoading.value = true;
+                    errorMessage.value = '';
+
+                    await nextTick();
+                    scrollToBottom();
+
+                    try {
+                        // Prepare conversation history for Bedrock
+                        const conversationHistory = messages.value
+                            .filter(msg => msg.role !== 'system')
+                            .map(msg => ({
+                                role: msg.role === 'user' ? 'user' : 'assistant',
+                                content: msg.content
+                            }));
+
+                        const response = await callBedrock(conversationHistory, selectedModel.value);
+
+                        const assistantMessage = {
+                            id: Date.now() + 1,
+                            role: 'assistant',
+                            content: response,
+                            timestamp: new Date()
+                        };
+
+                        messages.value.push(assistantMessage);
+                        
+                    } catch (error) {
+                        console.error('Error sending message:', error);
+                        errorMessage.value = error.message || 'Failed to send message';
+                        
+                        // Remove the user message if there was an error
+                        messages.value = messages.value.filter(msg => msg.id !== userMessage.id);
+                        inputMessage.value = currentInput; // Restore the input
+                    } finally {
+                        isLoading.value = false;
+                        await nextTick();
+                        scrollToBottom();
+                        messageInput.value?.focus();
+                    }
+                };
+
+                // Clear chat
+                const clearChat = () => {
+                    messages.value = [];
+                    errorMessage.value = '';
+                };
+
+                // Scroll to bottom
+                const scrollToBottom = () => {
+                    if (messagesContainer.value) {
+                        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+                    }
+                };
+
+                // Format message (basic HTML support)
+                const formatMessage = (content) => {
+                    return content
+                        .replace(/\n/g, '<br>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+                };
+
+                // Format time
+                const formatTime = (date) => {
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                };
+
+                // Initialize on mount
+                onMounted(() => {
+                    initializeAWS();
+                    messageInput.value?.focus();
+                });
+
+                return {
+                    messages,
+                    inputMessage,
+                    isLoading,
+                    isConnected,
+                    errorMessage,
+                    selectedModel,
+                    messagesContainer,
+                    messageInput,
+                    sendMessage,
+                    clearChat,
+                    formatMessage,
+                    formatTime
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
