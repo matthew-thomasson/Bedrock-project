@@ -16,10 +16,10 @@ const messageInput = ref(null)
 
 // AWS Configuration using Amplify secrets
 const awsConfig = reactive({
-    region: import.meta.env.AWS_REGION || 'us-east-1',
-    accessKeyId: import.meta.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: import.meta.env.AWS_SECRET_ACCESS_KEY || '',
-    sessionToken: import.meta.env.AWS_SESSION_TOKEN || ''
+    region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+    accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '',
+    sessionToken: import.meta.env.VITE_AWS_SESSION_TOKEN || ''
 })
 
 let bedrockRuntime = null

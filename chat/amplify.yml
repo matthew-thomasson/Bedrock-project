@@ -8,6 +8,9 @@ frontend:
     build:
       commands:
         - echo "Building Vue app for production..."
+        - export VITE_AWS_REGION=$AWS_REGION
+        - export VITE_AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+        - export VITE_AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
         - npm run build
         - echo "Build completed successfully"
   env:
