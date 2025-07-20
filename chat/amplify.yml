@@ -4,21 +4,14 @@ frontend:
     preBuild:
       commands:
         - nvm use 20
-        - cd chat
         - npm ci
     build:
       commands:
-        - cd chat
         - echo "Building Vue app for production..."
         - npm run build
         - echo "Build completed successfully"
-        - echo "Copying build files to root for Amplify deployment..."
-        - cd ..
-        - cp -r chat/dist/* ./
-        - echo "Files copied successfully"
-        - ls -la
   artifacts:
-    baseDirectory: .
+    baseDirectory: dist
     files:
       - '**/*'
   cache:
