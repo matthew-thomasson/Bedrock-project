@@ -1,0 +1,47 @@
+version: 1
+applications:
+  - appRoot: chat
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm use 20
+            - npm ci
+        build:
+          commands:
+            - echo "Building Vue chat app for production..."
+            - npm run build
+            - echo "Build completed successfully"
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .vite/**/*
+      customHeaders:
+        - pattern: '**'
+          headers:
+            - key: 'Strict-Transport-Security'
+              value: 'max-age=31536000; includeSubDomains'
+            - key: 'X-Content-Type-Options'
+              value: 'nosniff'
+            - key: 'X-Frame-Options'
+              value: 'DENY'
+            - key: 'X-XSS-Protection'
+              value: '1; mode=block'
+            - key: 'Content-Security-Policy'
+              value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.amazonaws.com; font-src 'self' data:;"
+        - pattern: '/static/**'
+          headers:
+            - key: 'Cache-Control'
+              value: 'public, max-age=31536000, immutable'
+        - pattern: '**.js'
+          headers:
+            - key: 'Cache-Control'
+              value: 'public, max-age=31536000, immutable'
+        - pattern: '**.css'
+          headers:
+            - key: 'Cache-Control'
+              value: 'public, max-age=31536000, immutable'
