@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "vue": "^3.5.17",
-    "aws-sdk": "^2.1691.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.637.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

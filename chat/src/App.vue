@@ -14,64 +14,129 @@ const selectedModel = ref('anthropic.claude-3-5-sonnet-20241022-v2:0')
 const messagesContainer = ref(null)
 const messageInput = ref(null)
 
-// AWS Configuration using Amplify environment variables
+// AWS Configuration using Amplify secrets
 const awsConfig = reactive({
-    region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
-    accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '',
-    sessionToken: import.meta.env.VITE_AWS_SESSION_TOKEN || ''
+    region: import.meta.env.AWS_REGION || 'us-east-1',
+    accessKeyId: import.meta.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: import.meta.env.AWS_SECRET_ACCESS_KEY || '',
+    sessionToken: import.meta.env.AWS_SESSION_TOKEN || ''
 })
 
 let bedrockRuntime = null
 
-// Initialize AWS SDK (stubbed)
-const initializeAWS = () => {
+// Initialize AWS SDK and test connectivity
+const initializeAWS = async () => {
     try {
-        // This will be uncommented when AWS credentials are available
-        /*
-        AWS.config.update({
+        console.log('Initializing AWS Bedrock...')
+        console.log('AWS Config:', {
             region: awsConfig.region,
-            accessKeyId: awsConfig.accessKeyId,
-            secretAccessKey: awsConfig.secretAccessKey,
-            sessionToken: awsConfig.sessionToken
-        });
+            hasAccessKey: !!awsConfig.accessKeyId,
+            hasSecretKey: !!awsConfig.secretAccessKey
+        })
         
-        bedrockRuntime = new AWS.BedrockRuntime({
-            region: awsConfig.region
-        });
-        */
+        // Check if we have credentials
+        if (!awsConfig.accessKeyId || !awsConfig.secretAccessKey) {
+            console.warn('AWS credentials not found in environment variables')
+            errorMessage.value = 'AWS credentials not configured'
+            return
+        }
         
-        // Simulate connection for demo
-        setTimeout(() => {
-            isConnected.value = true
-        }, 1000)
+        // Import AWS SDK dynamically
+        const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime')
         
-        console.log('AWS Bedrock integration ready (stubbed)')
+        // Create Bedrock client
+        bedrockRuntime = new BedrockRuntimeClient({
+            region: awsConfig.region,
+            credentials: {
+                accessKeyId: awsConfig.accessKeyId,
+                secretAccessKey: awsConfig.secretAccessKey,
+                ...(awsConfig.sessionToken && { sessionToken: awsConfig.sessionToken })
+            }
+        })
+        
+        // Test connectivity with a simple model list operation
+        await testConnectivity()
+        
+        isConnected.value = true
+        console.log('AWS Bedrock integration ready')
+        
     } catch (error) {
         console.error('Failed to initialize AWS:', error)
-        errorMessage.value = 'Failed to connect to AWS Bedrock'
+        errorMessage.value = `Failed to connect to AWS Bedrock: ${error.message}`
+        isConnected.value = false
     }
 }
 
-// Send message to Bedrock (stubbed)
+// Test AWS Bedrock connectivity
+const testConnectivity = async () => {
+    try {
+        // Test with a minimal invoke to check permissions
+        const testPayload = {
+            anthropic_version: "bedrock-2023-05-31",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "test" }]
+        }
+        
+        const { InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime')
+        const command = new InvokeModelCommand({
+            modelId: selectedModel.value,
+            body: JSON.stringify(testPayload),
+            contentType: "application/json",
+            accept: "application/json"
+        })
+        
+        const response = await bedrockRuntime.send(command)
+        console.log('Connectivity test successful')
+        return true
+        
+    } catch (error) {
+        console.error('Connectivity test failed:', error)
+        throw new Error(`Connectivity test failed: ${error.message}`)
+    }
+}
+
+// Send message to Bedrock
 const callBedrock = async (messages, modelId) => {
-    // This is where the actual Bedrock API call will be made
-    // For now, return a stubbed response
+    if (!bedrockRuntime || !isConnected.value) {
+        throw new Error('AWS Bedrock not connected')
+    }
     
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const responses = [
-                "I'm a stubbed response from AWS Bedrock. When you integrate with the actual service, I'll provide real AI-generated responses!",
-                "This is a simulated response. The actual Bedrock integration will use the model: " + modelId,
-                "Hello! I'm ready to help once you connect to AWS Bedrock. This is just a placeholder response for now.",
-                "Great question! Once connected to Bedrock, I'll be able to provide much more detailed and helpful responses.",
-                "I'm running in demo mode. Connect to AWS Bedrock to unlock my full capabilities!"
-            ]
-            
-            const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-            resolve(randomResponse)
-        }, 1500 + Math.random() * 1000) // Random delay between 1.5-2.5s
-    })
+    try {
+        // Prepare the payload for Claude models
+        const payload = {
+            anthropic_version: "bedrock-2023-05-31",
+            max_tokens: 4000,
+            messages: messages,
+            temperature: 0.7,
+            top_p: 0.9
+        }
+        
+        console.log('Sending request to Bedrock:', { modelId, messageCount: messages.length })
+        
+        const { InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime')
+        const command = new InvokeModelCommand({
+            modelId: modelId,
+            body: JSON.stringify(payload),
+            contentType: "application/json",
+            accept: "application/json"
+        })
+        
+        const response = await bedrockRuntime.send(command)
+        const responseBody = JSON.parse(new TextDecoder().decode(response.body))
+        
+        console.log('Received response from Bedrock')
+        
+        // Extract the response content
+        if (responseBody.content && responseBody.content.length > 0) {
+            return responseBody.content[0].text
+        } else {
+            throw new Error('Unexpected response format from Bedrock')
+        }
+        
+    } catch (error) {
+        console.error('Bedrock API call failed:', error)
+        throw new Error(`Bedrock API call failed: ${error.message}`)
+    }
 }
 
 // Send message
