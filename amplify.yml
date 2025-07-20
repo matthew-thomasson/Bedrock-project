@@ -15,16 +15,16 @@ frontend:
         - echo "Copying build files to root for Amplify deployment..."
         - cd ..
         - cp -r chat/dist/* ./
-        - echo "Files copied successfully"
-        - ls -la
+        - echo "Files copied successfully - listing root directory:"
+        - ls -la ./
   artifacts:
     baseDirectory: .
     files:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
-      - .vite/**/*
+      - chat/node_modules/**/*
+      - chat/.vite/**/*
   customHeaders:
     - pattern: '**'
       headers:

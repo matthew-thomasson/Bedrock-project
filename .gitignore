@@ -6,6 +6,12 @@ node_modules/
 dist/
 */dist/
 
+# Root level build files (copied from chat/dist during deployment)
+/index.html
+/assets/
+/vite.svg
+/_redirects
+
 # Environment variables
 .env
 .env.local
