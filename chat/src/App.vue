@@ -14,129 +14,89 @@ const selectedModel = ref('anthropic.claude-3-5-sonnet-20241022-v2:0')
 const messagesContainer = ref(null)
 const messageInput = ref(null)
 
-// AWS Configuration using Amplify secrets
-const awsConfig = reactive({
-    region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
-    accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '',
-    sessionToken: import.meta.env.VITE_AWS_SESSION_TOKEN || ''
+// API Configuration
+const apiConfig = reactive({
+    baseUrl: '/api', // Will use backend API endpoints
+    region: 'us-east-1'
 })
 
-let bedrockRuntime = null
-
-// Initialize AWS SDK and test connectivity
+// Initialize connection check
 const initializeAWS = async () => {
     try {
-        console.log('Initializing AWS Bedrock...')
-        console.log('AWS Config:', {
-            region: awsConfig.region,
-            hasAccessKey: !!awsConfig.accessKeyId,
-            hasSecretKey: !!awsConfig.secretAccessKey
-        })
+        console.log('Checking backend API connectivity...')
         
-        // Check if we have credentials
-        if (!awsConfig.accessKeyId || !awsConfig.secretAccessKey) {
-            console.warn('AWS credentials not found in environment variables')
-            errorMessage.value = 'AWS credentials not configured'
-            return
-        }
+        // Test backend API connection
+        const response = await fetch(`${apiConfig.baseUrl}/health`)
         
-        // Import AWS SDK dynamically
-        const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime')
-        
-        // Create Bedrock client
-        bedrockRuntime = new BedrockRuntimeClient({
-            region: awsConfig.region,
-            credentials: {
-                accessKeyId: awsConfig.accessKeyId,
-                secretAccessKey: awsConfig.secretAccessKey,
-                ...(awsConfig.sessionToken && { sessionToken: awsConfig.sessionToken })
-            }
-        })
-        
-        // Test connectivity with a simple model list operation
-        await testConnectivity()
-        
-        isConnected.value = true
-        console.log('AWS Bedrock integration ready')
-        
-    } catch (error) {
-        console.error('Failed to initialize AWS:', error)
-        errorMessage.value = `Failed to connect to AWS Bedrock: ${error.message}`
-        isConnected.value = false
-    }
-}
-
-// Test AWS Bedrock connectivity
-const testConnectivity = async () => {
-    try {
-        // Test with a minimal invoke to check permissions
-        const testPayload = {
-            anthropic_version: "bedrock-2023-05-31",
-            max_tokens: 1,
-            messages: [{ role: "user", content: "test" }]
-        }
-        
-        const { InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime')
-        const command = new InvokeModelCommand({
-            modelId: selectedModel.value,
-            body: JSON.stringify(testPayload),
-            contentType: "application/json",
-            accept: "application/json"
-        })
-        
-        const response = await bedrockRuntime.send(command)
-        console.log('Connectivity test successful')
-        return true
-        
-    } catch (error) {
-        console.error('Connectivity test failed:', error)
-        throw new Error(`Connectivity test failed: ${error.message}`)
-    }
-}
-
-// Send message to Bedrock
-const callBedrock = async (messages, modelId) => {
-    if (!bedrockRuntime || !isConnected.value) {
-        throw new Error('AWS Bedrock not connected')
-    }
-    
-    try {
-        // Prepare the payload for Claude models
-        const payload = {
-            anthropic_version: "bedrock-2023-05-31",
-            max_tokens: 4000,
-            messages: messages,
-            temperature: 0.7,
-            top_p: 0.9
-        }
-        
-        console.log('Sending request to Bedrock:', { modelId, messageCount: messages.length })
-        
-        const { InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime')
-        const command = new InvokeModelCommand({
-            modelId: modelId,
-            body: JSON.stringify(payload),
-            contentType: "application/json",
-            accept: "application/json"
-        })
-        
-        const response = await bedrockRuntime.send(command)
-        const responseBody = JSON.parse(new TextDecoder().decode(response.body))
-        
-        console.log('Received response from Bedrock')
-        
-        // Extract the response content
-        if (responseBody.content && responseBody.content.length > 0) {
-            return responseBody.content[0].text
+        if (response.ok) {
+            isConnected.value = true
+            console.log('Backend API connected successfully')
         } else {
-            throw new Error('Unexpected response format from Bedrock')
+            throw new Error('Backend API health check failed')
         }
         
     } catch (error) {
-        console.error('Bedrock API call failed:', error)
-        throw new Error(`Bedrock API call failed: ${error.message}`)
+        console.error('Failed to connect to backend API:', error)
+        errorMessage.value = 'Backend API not available - using demo mode'
+        // Fallback to demo mode
+        setTimeout(() => {
+            isConnected.value = true
+        }, 1000)
     }
+}
+
+// Send message to backend API
+const callBedrock = async (messages, modelId) => {
+    try {
+        console.log('Sending request to backend API:', { modelId, messageCount: messages.length })
+        
+        const response = await fetch(`${apiConfig.baseUrl}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: messages,
+                modelId: modelId,
+                temperature: 0.7,
+                maxTokens: 4000
+            })
+        })
+        
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status} ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        console.log('Received response from backend API')
+        
+        return data.response || data.content || 'No response from API'
+        
+    } catch (error) {
+        console.error('Backend API call failed:', error)
+        
+        // Fallback to demo responses if backend is not available
+        console.log('Falling back to demo mode...')
+        return await callBedrockDemo(messages, modelId)
+    }
+}
+
+// Demo fallback when backend is not available
+const callBedrockDemo = async (messages, modelId) => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const responses = [
+                "I'm running in demo mode. To use real AI responses, you'll need to set up the backend API with proper AWS Bedrock integration.",
+                "This is a simulated response. The app is designed to work with a secure backend API that handles AWS credentials safely.",
+                "Hello! I'm in demo mode since the backend API isn't available. In production, I would connect securely to AWS Bedrock through your backend.",
+                "Great question! Once you set up the backend API with proper AWS credentials, I'll be able to provide real AI responses.",
+                `I would use the ${modelId} model to answer this, but I'm currently in demo mode for security reasons.`
+            ]
+            
+            const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+            resolve(randomResponse)
+        }, 1500 + Math.random() * 1000)
+    })
 }
 
 // Send message
