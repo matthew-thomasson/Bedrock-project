@@ -14,12 +14,12 @@ const selectedModel = ref('anthropic.claude-3-5-sonnet-20241022-v2:0')
 const messagesContainer = ref(null)
 const messageInput = ref(null)
 
-// AWS Configuration (stubbed for now)
+// AWS Configuration using Amplify environment variables
 const awsConfig = reactive({
-    region: 'us-east-1', // Change to your preferred region
-    accessKeyId: '', // Will be configured later
-    secretAccessKey: '', // Will be configured later
-    sessionToken: '' // For temporary credentials
+    region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+    accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '',
+    sessionToken: import.meta.env.VITE_AWS_SESSION_TOKEN || ''
 })
 
 let bedrockRuntime = null

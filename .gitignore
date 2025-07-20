@@ -17,6 +17,9 @@ dist/
 .env.local
 .env.production
 
+# Local secrets script
+set-secrets.sh
+
 # IDE files
 .vscode/
 .idea/
